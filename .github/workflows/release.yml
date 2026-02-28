@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build x86
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-multilib nasm binutils
+      - name: Build
+        run: make
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: microant
+          path: microant.bin
+
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: microant
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MicroANT ${{ github.ref_name }}
+          body: |
+            ## MicroANT ${{ github.ref_name }}
+
+            Bare-metal x86 heart rate monitor — reads ANT+ data from a Garmin USB stick and displays BPM on a VGA text-mode screen.
+
+            ### Usage
+
+            Run with QEMU (no real device — stops at "No ANT+ stick found"):
+            ```
+            qemu-system-i386 -kernel microant.bin -device qemu-xhci,id=xhci
+            ```
+
+            Run with a real Garmin ANT+ stick (USB passthrough):
+            ```
+            sudo qemu-system-i386 -kernel microant.bin \
+              -device qemu-xhci,id=xhci \
+              -device usb-host,vendorid=0x0fcf,productid=0x1008
+            ```
+          files: |
+            microant.bin
