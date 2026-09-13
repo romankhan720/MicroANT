@@ -28,30 +28,40 @@
 #include "display.h"
 #include "vga.h"
 
-/* ── Direct VGA memory access for positioned drawing ───────────────── *
- *
- * While vga.c provides a sequential text output API (vga_putchar,
- * vga_print), we need to place characters at arbitrary screen positions
- * for the large digit display. We access VGA memory directly.
- */
+/* ── Direct VGA memory access for positioned drawing ───────────────── */
 
-/* VGA text mode framebuffer at physical address 0xB8000 */
 static volatile uint16_t *const VMEM = (volatile uint16_t *)0xB8000;
 
-/* Create a VGA character+attribute entry.
- * Low byte = ASCII character, high byte = color attribute. */
+#define BPM_AREA_TOP       8
+#define BPM_DRAW_ROW       (BPM_AREA_TOP + 1)
+#define GRAPH_PANEL_TOP    16
+#define GRAPH_PANEL_BOTTOM 22
+#define GRAPH_PANEL_LEFT   22
+#define GRAPH_PANEL_RIGHT  57
+#define GRAPH_LABEL_ROW    GRAPH_PANEL_TOP
+#define GRAPH_INNER_TOP    (GRAPH_PANEL_TOP + 1)
+#define GRAPH_INNER_BOTTOM (GRAPH_PANEL_BOTTOM - 1)
+#define GRAPH_HEIGHT       (GRAPH_INNER_BOTTOM - GRAPH_INNER_TOP + 1)
+#define GRAPH_LEFT         25
+
+/* ── NEW: BPM history buffer (no dynamic allocation, fixed size) ───── */
+
+#define HISTORY_SIZE 30
+static uint8_t history[HISTORY_SIZE];
+static int hist_idx = 0;
+
+/* Create a VGA character+attribute entry. */
 static uint16_t make_entry(char c, uint8_t color) {
     return (uint16_t)(uint8_t)c | ((uint16_t)color << 8);
 }
 
-/* Place a single character at a specific row/column with color.
- * Bounds-checked to prevent writing outside the 80×25 screen. */
+/* Place a character at row/column. */
 static void put_at(int row, int col, char c, uint8_t color) {
     if (row >= 0 && row < VGA_HEIGHT && col >= 0 && col < VGA_WIDTH)
         VMEM[row * VGA_WIDTH + col] = make_entry(c, color);
 }
 
-/* Print a string starting at a specific row/column. */
+/* Print string at position. */
 static void print_at(int row, int col, const char *str, uint8_t color) {
     while (*str && col < VGA_WIDTH) {
         put_at(row, col, *str, color);
@@ -60,83 +70,27 @@ static void print_at(int row, int col, const char *str, uint8_t color) {
     }
 }
 
-/* Fill an entire row with spaces in the given color (clears the row). */
+/* Clear row */
 static void clear_row(int row, uint8_t color) {
     for (int col = 0; col < VGA_WIDTH; col++)
         VMEM[row * VGA_WIDTH + col] = make_entry(' ', color);
 }
 
-/* ── 5-row tall digit font (5 wide × 5 tall) ──────────────────────── *
- *
- * Each digit 0-9 is defined as 5 strings of 5 characters each.
- * '#' characters form the visible shape, spaces are background.
- * This gives large, readable digits visible from a distance. */
+/* ── Digit font ───────────────── */
 
 static const char *DIGITS[10][5] = {
-    /* 0 */
-    { " ### ",
-      "#   #",
-      "#   #",
-      "#   #",
-      " ### " },
-    /* 1 */
-    { "  #  ",
-      " ##  ",
-      "  #  ",
-      "  #  ",
-      " ### " },
-    /* 2 */
-    { " ### ",
-      "#   #",
-      "  ## ",
-      " #   ",
-      "#####" },
-    /* 3 */
-    { " ### ",
-      "#   #",
-      "  ## ",
-      "#   #",
-      " ### " },
-    /* 4 */
-    { "#   #",
-      "#   #",
-      "#####",
-      "    #",
-      "    #" },
-    /* 5 */
-    { "#####",
-      "#    ",
-      " ### ",
-      "    #",
-      " ### " },
-    /* 6 */
-    { " ### ",
-      "#    ",
-      "#### ",
-      "#   #",
-      " ### " },
-    /* 7 */
-    { "#####",
-      "    #",
-      "   # ",
-      "  #  ",
-      "  #  " },
-    /* 8 */
-    { " ### ",
-      "#   #",
-      " ### ",
-      "#   #",
-      " ### " },
-    /* 9 */
-    { " ### ",
-      "#   #",
-      " ####",
-      "    #",
-      " ### " },
+    { " ### ", "#   #", "#   #", "#   #", " ### " },
+    { "  #  ", " ##  ", "  #  ", "  #  ", " ### " },
+    { " ### ", "#   #", "  ## ", " #   ", "#####" },
+    { " ### ", "#   #", "  ## ", "#   #", " ### " },
+    { "#   #", "#   #", "#####", "    #", "    #" },
+    { "#####", "#    ", " ### ", "    #", " ### " },
+    { " ### ", "#    ", "#### ", "#   #", " ### " },
+    { "#####", "    #", "   # ", "  #  ", "  #  " },
+    { " ### ", "#   #", " ### ", "#   #", " ### " },
+    { " ### ", "#   #", " ####", "    #", " ### " },
 };
 
-/* Heart symbol (5 lines × 7 columns).
- * Rendered using ASCII character 3 (♥ in the PC character set). */
 static const char *HEART[5] = {
     " ## ## ",
     "#######",
@@ -145,9 +99,40 @@ static const char *HEART[5] = {
     "  ###  ",
 };
 
-/* Draw a large digit (5×5) at the given screen position. */
+/* ── NEW: Color selection based on BPM ───────────────── */
+
+static uint8_t get_bpm_color(uint8_t bpm) {
+    if (bpm < 90)
+        return (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_GREEN;
+    else if (bpm < 120)
+        return (VGA_COLOR_BLACK << 4) | VGA_COLOR_BROWN;
+    else
+        return (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_RED;
+}
+
+/* ── NEW: Small integer to string (no libc) ─────────── */
+
+static void u8_to_str(uint8_t val, char *buf) {
+    buf[0] = '0' + (val / 100);
+    buf[1] = '0' + ((val / 10) % 10);
+    buf[2] = '0' + (val % 10);
+    buf[3] = '\0';
+}
+
+static uint8_t get_history_color(uint8_t bpm, int is_latest) {
+    if (is_latest)
+        return (VGA_COLOR_BLACK << 4) | VGA_COLOR_WHITE;
+    if (bpm < 90)
+        return (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_CYAN;
+    if (bpm < 120)
+        return (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_GREEN;
+    return (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_RED;
+}
+
+/* Draw a large digit */
 static void draw_big_digit(int digit, int row, int col, uint8_t color) {
     if (digit < 0 || digit > 9) return;
+
     for (int r = 0; r < 5; r++)
         for (int c = 0; c < 5; c++)
             if (DIGITS[digit][r][c] == '#')
@@ -156,104 +141,139 @@ static void draw_big_digit(int digit, int row, int col, uint8_t color) {
                 put_at(row + r, col + c, ' ', 0x00);
 }
 
-/* Draw the heart symbol at the given screen position.
- * Uses ASCII character 3 (♥) for a filled heart appearance. */
+/* Draw heart */
 static void draw_heart(int row, int col, uint8_t color) {
     for (int r = 0; r < 5; r++)
         for (int c = 0; c < 7; c++)
             if (HEART[r][c] == '#')
-                put_at(row + r, col + c, 3, color);  /* ASCII 3 = ♥ */
+                put_at(row + r, col + c, 3, color);
             else
                 put_at(row + r, col + c, ' ', 0x00);
 }
 
-/* ── Public API ────────────────────────────────────────────────────── */
+/* ── NEW: ASCII graph for BPM history ──────────────── */
 
-/*
- * Initialize the display: clear screen, draw the title bar, and show
- * a placeholder in the heart rate area.
- *
- * Layout after init:
- *   Row 0:  [=========  MicroANT v0.1  =========] (blue background)
- *   Row 10: "--- BPM" (dim grey placeholder)
- *   Row 24: "> Initializing..." (green status)
- */
+static void draw_history_graph(void) {
+    uint8_t border_color = (VGA_COLOR_BLACK << 4) | VGA_COLOR_DARK_GREY;
+    uint8_t label_color  = (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_GREY;
+    uint8_t grid_color   = (VGA_COLOR_BLACK << 4) | VGA_COLOR_DARK_GREY;
+
+    for (int row = GRAPH_PANEL_TOP; row <= GRAPH_PANEL_BOTTOM; row++) {
+        for (int col = GRAPH_PANEL_LEFT; col <= GRAPH_PANEL_RIGHT; col++)
+            put_at(row, col, ' ', 0x00);
+    }
+
+    for (int col = GRAPH_PANEL_LEFT; col <= GRAPH_PANEL_RIGHT; col++) {
+        put_at(GRAPH_PANEL_TOP, col, '-', border_color);
+        put_at(GRAPH_PANEL_BOTTOM, col, '-', border_color);
+    }
+
+    for (int row = GRAPH_PANEL_TOP; row <= GRAPH_PANEL_BOTTOM; row++) {
+        put_at(row, GRAPH_PANEL_LEFT, '|', border_color);
+        put_at(row, GRAPH_PANEL_RIGHT, '|', border_color);
+    }
+
+    put_at(GRAPH_PANEL_TOP, GRAPH_PANEL_LEFT, '+', border_color);
+    put_at(GRAPH_PANEL_TOP, GRAPH_PANEL_RIGHT, '+', border_color);
+    put_at(GRAPH_PANEL_BOTTOM, GRAPH_PANEL_LEFT, '+', border_color);
+    put_at(GRAPH_PANEL_BOTTOM, GRAPH_PANEL_RIGHT, '+', border_color);
+
+    print_at(GRAPH_LABEL_ROW, GRAPH_PANEL_LEFT + 2, "TREND", label_color);
+    print_at(GRAPH_LABEL_ROW, GRAPH_PANEL_RIGHT - 4, "LIVE", label_color);
+
+    for (int row = GRAPH_INNER_TOP; row <= GRAPH_INNER_BOTTOM; row++) {
+        for (int col = GRAPH_LEFT; col < GRAPH_LEFT + HISTORY_SIZE; col++) {
+            char grid = ((GRAPH_INNER_BOTTOM - row) % 2 == 0) ? '.' : ' ';
+            put_at(row, col, grid, grid_color);
+        }
+    }
+
+    for (int i = 0; i < HISTORY_SIZE; i++) {
+        int hist_pos = (hist_idx + i) % HISTORY_SIZE;
+        int val = history[hist_pos];
+        int height = (val - 50) / 20;
+        uint8_t color = get_history_color(val, i == HISTORY_SIZE - 1);
+
+        if (val > 0 && height == 0)
+            height = 1;
+        if (height > GRAPH_HEIGHT)
+            height = GRAPH_HEIGHT;
+
+        for (int h = 0; h < height; h++) {
+            char cell = (h == height - 1) ? '^' : (char)219;
+            put_at(GRAPH_INNER_BOTTOM - h, GRAPH_LEFT + i, cell, color);
+        }
+    }
+}
+
+/* ── Public API ───────────────── */
+
 void display_init(void) {
     vga_init();
     vga_set_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
     vga_clear();
 
-    /* Title bar: white text on blue background */
+    /* Title bar */
     uint8_t title_color = (VGA_COLOR_BLUE << 4) | VGA_COLOR_WHITE;
     clear_row(0, title_color);
-    print_at(0, 30, "  MicroANT v0.1  ", title_color);
 
-    /* Heart rate area placeholder (shown before first data arrives) */
+    /* Centered title (improvement) */
+    const char *title = "  MicroANT v0.1  ";
+    int col = (VGA_WIDTH - 18) / 2;
+    print_at(0, col, title, title_color);
+
+    /* Placeholder */
     uint8_t dim = (VGA_COLOR_BLACK << 4) | VGA_COLOR_DARK_GREY;
     print_at(10, 30, "--- BPM", dim);
 
-    /* Status bar */
     display_status("Initializing...");
 }
 
-/*
- * Update the heart rate display with the current BPM value.
- *
- * Draws three elements centered on the screen:
- *   1. Heart icon (♥) in red, at column 22
- *   2. BPM digits in large 5×5 font, starting at column 32
- *   3. Vertical "B P M" label next to the last digit
- *
- * The digit rendering handles 1, 2, or 3-digit numbers:
- *   - Single digit (0-9): just the ones digit
- *   - Two digits (10-99): tens + ones
- *   - Three digits (100-255): hundreds + tens + ones
- */
 void display_bpm(uint8_t bpm) {
-    int base_row = 8;
-
-    /* Color scheme */
     uint8_t heart_color = (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_RED;
-    uint8_t digit_color = (VGA_COLOR_BLACK << 4) | VGA_COLOR_WHITE;
+    uint8_t digit_color = get_bpm_color(bpm);
     uint8_t bpm_color   = (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_GREY;
 
-    /* Clear the display area (rows 8-14) */
-    for (int r = base_row; r < base_row + 7; r++)
+    /* Store history */
+    history[hist_idx++] = bpm;
+    if (hist_idx >= HISTORY_SIZE) hist_idx = 0;
+
+    /* Clear area */
+    for (int r = BPM_AREA_TOP; r < BPM_AREA_TOP + 7; r++)
         clear_row(r, 0x00);
 
-    /* Draw the heart icon (♥) on the left */
-    draw_heart(base_row + 1, 22, heart_color);
+    draw_heart(BPM_DRAW_ROW, 22, heart_color);
 
-    /* Decompose BPM into individual digits */
     int hundreds = bpm / 100;
     int tens     = (bpm / 10) % 10;
     int ones     = bpm % 10;
 
-    /* Draw each digit, advancing 6 columns between them (5 for digit + 1 gap) */
     int col = 32;
 
     if (hundreds > 0) {
-        draw_big_digit(hundreds, base_row + 1, col, digit_color);
+        draw_big_digit(hundreds, BPM_DRAW_ROW, col, digit_color);
         col += 6;
     }
     if (hundreds > 0 || tens > 0) {
-        draw_big_digit(tens, base_row + 1, col, digit_color);
+        draw_big_digit(tens, BPM_DRAW_ROW, col, digit_color);
         col += 6;
     }
-    draw_big_digit(ones, base_row + 1, col, digit_color);
+    draw_big_digit(ones, BPM_DRAW_ROW, col, digit_color);
     col += 6;
 
-    /* "BPM" label displayed vertically next to the digits */
-    print_at(base_row + 2, col + 1, "B", bpm_color);
-    print_at(base_row + 3, col + 1, "P", bpm_color);
-    print_at(base_row + 4, col + 1, "M", bpm_color);
+    /* Vertical BPM */
+    print_at(BPM_DRAW_ROW + 1, col + 1, "B", bpm_color);
+    print_at(BPM_DRAW_ROW + 2, col + 1, "P", bpm_color);
+    print_at(BPM_DRAW_ROW + 3, col + 1, "M", bpm_color);
+
+    /* Numeric BPM (new) */
+    char buf[4];
+    u8_to_str(bpm, buf);
+    print_at(BPM_AREA_TOP + 6, 36, buf, bpm_color);
+
+    draw_history_graph();
 }
 
-/*
- * Update the status line at the bottom of the screen.
- * Shows a green "> " prompt followed by the status message.
- * Used to indicate the current boot stage or runtime state.
- */
 void display_status(const char *msg) {
     uint8_t status_color = (VGA_COLOR_BLACK << 4) | VGA_COLOR_LIGHT_GREEN;
     clear_row(24, 0x00);
